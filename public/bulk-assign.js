@@ -21,12 +21,32 @@ function injectStyles(){
     #${PANEL_ID} .ba-action.primary{background:#22dc6b;color:#031108;border-color:#22dc6b}
     #${PANEL_ID} .ba-action:disabled{opacity:.45;cursor:not-allowed}
     #${PANEL_ID} .ba-status{margin-left:auto;color:#b9d2c1;font-weight:700}
-    .bulk-song-check{width:22px;height:22px;accent-color:#22dc6b;flex:0 0 auto;margin-right:8px}
-    .song-row.bulk-selectable{cursor:pointer}
-    .song-row.bulk-selected{background:rgba(34,220,107,.08);outline:1px solid rgba(34,220,107,.25);outline-offset:-1px;border-radius:10px}
-    @media(max-width:700px){#${PANEL_ID} .ba-status{width:100%;margin-left:0}.bulk-song-check{width:24px;height:24px}}
+
+    .song-row.bulk-selectable{cursor:pointer;position:relative}
+    .song-row.bulk-selected{background:rgba(34,220,107,.11);outline:2px solid rgba(34,220,107,.55);outline-offset:-2px;border-radius:12px}
+    .bulk-song-toggle{width:34px;height:34px;border-radius:10px;border:2px solid #86a293;background:#f4f4f4;color:transparent;display:grid;place-items:center;font-size:21px;font-weight:950;line-height:1;flex:0 0 auto;padding:0;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+    .bulk-song-toggle.selected{background:#22dc6b;border-color:#22dc6b;color:#031108}
+
+    @media(max-width:700px){
+      #${PANEL_ID} .ba-status{width:100%;margin-left:0}
+      .bulk-song-toggle{width:44px;height:44px;border-radius:13px;font-size:25px}
+      .song-row.bulk-selectable{min-height:104px;padding:14px 8px!important}
+      .song-row.bulk-selected{background:rgba(34,220,107,.14)}
+    }
   `;
   document.head.appendChild(style);
+}
+
+function toggleSong(panel,row,songId,button){
+  const selected=new Set((panel.dataset.selected||'').split(',').filter(Boolean));
+  if(selected.has(songId)) selected.delete(songId); else selected.add(songId);
+  panel.dataset.selected=[...selected].join(',');
+  const isSelected=selected.has(songId);
+  row.classList.toggle('bulk-selected',isSelected);
+  button.classList.toggle('selected',isSelected);
+  button.textContent=isSelected?'✓':'';
+  button.setAttribute('aria-pressed',isSelected?'true':'false');
+  updateStatus(panel,getState());
 }
 
 function buildPanel(){
@@ -50,7 +70,7 @@ function buildPanel(){
 
   panel.innerHTML=`
     <div class="ba-title">Quick assign songs</div>
-    <div class="ba-help">1. Choose a friend. 2. Tick all of their songs. 3. Press <b>Assign selected</b>. Each friend can have up to 10 songs.</div>
+    <div class="ba-help">1. Choose a friend. 2. Tap each of their songs so it turns green. 3. Press <b>Assign selected</b>. Each friend can have up to 10 songs.</div>
     <div class="ba-people"></div>
     <div class="ba-toolbar">
       <button class="ba-action" data-action="unassigned">Select all unassigned</button>
@@ -72,22 +92,34 @@ function buildPanel(){
   rows.forEach((row,i)=>{
     const song=state.songs[i];
     if(!song) return;
-    let cb=row.querySelector('.bulk-song-check');
-    if(!cb){
-      cb=document.createElement('input');
-      cb.type='checkbox'; cb.className='bulk-song-check'; cb.setAttribute('aria-label',`Select ${song.name}`);
-      row.insertBefore(cb,row.firstChild);
+
+    row.querySelector('.bulk-song-check')?.remove();
+    let toggle=row.querySelector('.bulk-song-toggle');
+    if(!toggle){
+      toggle=document.createElement('button');
+      toggle.type='button';
+      toggle.className='bulk-song-toggle';
+      toggle.setAttribute('aria-label',`Select ${song.name}`);
+      row.insertBefore(toggle,row.firstChild);
     }
-    cb.dataset.songId=song.id;
-    cb.checked=selectedIds.has(song.id);
-    row.classList.toggle('bulk-selected',cb.checked);
+
+    const isSelected=selectedIds.has(song.id);
+    toggle.classList.toggle('selected',isSelected);
+    toggle.textContent=isSelected?'✓':'';
+    toggle.setAttribute('aria-pressed',isSelected?'true':'false');
+    row.classList.toggle('bulk-selected',isSelected);
     row.classList.add('bulk-selectable');
-    cb.onchange=()=>{
-      const s=new Set((panel.dataset.selected||'').split(',').filter(Boolean));
-      cb.checked?s.add(song.id):s.delete(song.id);
-      panel.dataset.selected=[...s].join(',');
-      row.classList.toggle('bulk-selected',cb.checked);
-      updateStatus(panel,state);
+
+    toggle.onclick=(e)=>{
+      e.preventDefault();
+      e.stopPropagation();
+      toggleSong(panel,row,song.id,toggle);
+    };
+
+    row.onclick=(e)=>{
+      if(e.target.closest('select,option,button:not(.bulk-song-toggle)')) return;
+      if(e.target===toggle) return;
+      toggleSong(panel,row,song.id,toggle);
     };
   });
 
@@ -100,6 +132,7 @@ function buildPanel(){
 }
 
 function updateStatus(panel,state){
+  if(!state) return;
   const personId=panel.dataset.person || '';
   const selected=(panel.dataset.selected||'').split(',').filter(Boolean);
   const person=state.participants.find(p=>p.id===personId);
