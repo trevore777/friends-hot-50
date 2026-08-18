@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
-  Music2, Trophy, Users, Settings, Play, Pause, RotateCcw,
-  CheckCircle2, ListMusic, Sparkles, Plus, Trash2, Wifi, WifiOff,
-  Shuffle, X, Save, LogOut, Copy, Upload, Download, Volume2
+  Music2, Trophy, Users, Settings, Play, Pause, RotateCcw, ExternalLink,
+  CheckCircle2, ListMusic, Sparkles, ChevronRight, Plus, Trash2, Wifi, WifiOff,
+  Shuffle, Medal, X, Save, LogOut, Copy, Upload, Download, Search, Volume2
 } from 'lucide-react';
 import './styles.css';
 
@@ -19,7 +19,6 @@ function prizePositionsFor(total) {
     .filter(p => p <= total)
     .sort((a,b)=>b-a);
 }
-
 const DEMO_SONGS = [
   ['Mr Brightside','The Killers'],['Everlong','Foo Fighters'],['Dancing Queen','ABBA'],['Thunderstruck','AC/DC'],
   ['Blinding Lights','The Weeknd'],['Dreams','Fleetwood Mac'],['Africa','Toto'],['Take on Me','a-ha'],
@@ -28,7 +27,9 @@ const DEMO_SONGS = [
 const DEFAULT_PEOPLE = ['Trevor','Sarah','John','Michelle','Peter'];
 
 function uid() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
-function loadState() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || null; } catch { return null; } }
+function loadState() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || null; } catch { return null; }
+}
 function initialState() {
   return {
     eventName: 'Friends Hot 50', participants: DEFAULT_PEOPLE.map(name => ({id:uid(), name})),
@@ -37,7 +38,9 @@ function initialState() {
   };
 }
 function saveState(s) { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); }
-function parsePlaylistId(value='') { const m = value.match(/playlist[/:]([A-Za-z0-9]+)/); return m ? m[1] : value.trim(); }
+function parsePlaylistId(value='') {
+  const m = value.match(/playlist[/:]([A-Za-z0-9]+)/); return m ? m[1] : value.trim();
+}
 function formatTime(iso) { return iso ? new Date(iso).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : ''; }
 function b64url(bytes) { return btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); }
 async function sha256(text) { return crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)); }
@@ -45,46 +48,33 @@ function randomVerifier() { const a = new Uint8Array(64); crypto.getRandomValues
 
 async function spotifyLogin(clientId) {
   if (!clientId) throw new Error('Add your Spotify Client ID in Settings first.');
-  const verifier = randomVerifier();
-  const challenge = b64url(await sha256(verifier));
+  const verifier = randomVerifier(); const challenge = b64url(await sha256(verifier));
   const redirectUri = window.location.origin + '/';
   sessionStorage.setItem(PKCE_KEY, JSON.stringify({verifier, redirectUri}));
   const p = new URLSearchParams({
-    client_id: clientId,
-    response_type:'code',
-    redirect_uri:redirectUri,
+    client_id: clientId, response_type:'code', redirect_uri:redirectUri,
     scope:'user-read-currently-playing user-read-playback-state user-read-recently-played user-modify-playback-state playlist-read-private playlist-read-collaborative',
-    code_challenge_method:'S256',
-    code_challenge:challenge,
-    show_dialog:'true'
+    code_challenge_method:'S256', code_challenge:challenge, show_dialog:'true'
   });
   location.href = `https://accounts.spotify.com/authorize?${p}`;
 }
-
 async function exchangeSpotifyCode(code, clientId) {
   const saved = JSON.parse(sessionStorage.getItem(PKCE_KEY) || '{}');
   if (!saved.verifier) throw new Error('Spotify login session expired. Try connecting again.');
   const body = new URLSearchParams({client_id:clientId, grant_type:'authorization_code', code, redirect_uri:saved.redirectUri, code_verifier:saved.verifier});
   const r = await fetch('https://accounts.spotify.com/api/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body});
   if(!r.ok) throw new Error('Spotify token exchange failed.');
-  const t = await r.json();
-  const token = {...t, expires_at: Date.now() + t.expires_in*1000};
-  localStorage.setItem(TOKEN_KEY, JSON.stringify(token));
-  sessionStorage.removeItem(PKCE_KEY);
-  return token;
+  const t = await r.json(); const token = {...t, expires_at: Date.now() + t.expires_in*1000};
+  localStorage.setItem(TOKEN_KEY, JSON.stringify(token)); sessionStorage.removeItem(PKCE_KEY); return token;
 }
-
 async function refreshToken(token, clientId) {
   if (!token?.refresh_token) return null;
   const body = new URLSearchParams({client_id:clientId, grant_type:'refresh_token', refresh_token:token.refresh_token});
   const r = await fetch('https://accounts.spotify.com/api/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body});
   if(!r.ok) return null;
-  const t = await r.json();
-  const next={...token,...t,refresh_token:t.refresh_token||token.refresh_token,expires_at:Date.now()+t.expires_in*1000};
-  localStorage.setItem(TOKEN_KEY, JSON.stringify(next));
-  return next;
+  const t = await r.json(); const next={...token,...t,refresh_token:t.refresh_token||token.refresh_token,expires_at:Date.now()+t.expires_in*1000};
+  localStorage.setItem(TOKEN_KEY, JSON.stringify(next)); return next;
 }
-
 async function spotifyFetch(path, token, options={}) {
   const r = await fetch(`https://api.spotify.com/v1${path}`,{
     ...options,
@@ -110,30 +100,21 @@ function App(){
   const [tab,setTab] = useState('countdown');
   const [token,setToken] = useState(()=>{try{return JSON.parse(localStorage.getItem(TOKEN_KEY))}catch{return null}});
   const [spotifyUser,setSpotifyUser] = useState(null);
-  const [notice,setNotice] = useState('');
-  const [error,setError] = useState('');
-  const [polling,setPolling] = useState(false);
-  const [nowPlaying,setNowPlaying] = useState(null);
-  const [settingsOpen,setSettingsOpen] = useState(false);
-  const [prize,setPrize] = useState(null);
+  const [notice,setNotice] = useState(''); const [error,setError] = useState('');
+  const [polling,setPolling] = useState(false); const [nowPlaying,setNowPlaying] = useState(null);
+  const [settingsOpen,setSettingsOpen] = useState(false); const [prize,setPrize] = useState(null);
   const pollingRef = useRef(false);
   const lastLiveTrackRef = useRef(null);
-
   useEffect(()=>saveState(state),[state]);
 
-  const remaining = Math.max(0,state.songs.length-state.history.length);
   const ownerMap = useMemo(()=>Object.fromEntries(state.participants.map(p=>[p.id,p.name])),[state.participants]);
   const songMap = useMemo(()=>Object.fromEntries(state.songs.map(s=>[s.spotifyId,s])),[state.songs]);
 
   useEffect(()=>{
-    const url = new URL(location.href);
-    const code=url.searchParams.get('code');
-    const authError=url.searchParams.get('error');
+    const url = new URL(location.href); const code=url.searchParams.get('code'); const authError=url.searchParams.get('error');
     if(authError){setError(`Spotify login: ${authError}`); history.replaceState({},'',location.pathname);}
     if(code && state.spotifyClientId){
-      exchangeSpotifyCode(code,state.spotifyClientId)
-        .then(t=>{setToken(t);setNotice('Spotify connected.');history.replaceState({},'',location.pathname);})
-        .catch(e=>setError(e.message));
+      exchangeSpotifyCode(code,state.spotifyClientId).then(t=>{setToken(t);setNotice('Spotify connected.');history.replaceState({},'',location.pathname);}).catch(e=>setError(e.message));
     }
   },[]);
 
@@ -144,24 +125,17 @@ function App(){
       let t=token;
       if(t.expires_at && t.expires_at < Date.now()+60000){ t=await refreshToken(t,state.spotifyClientId); if(t) setToken(t); }
       if(t){ try{const me=await spotifyFetch('/me',t); if(alive)setSpotifyUser(me);}catch{} }
-    })();
-    return()=>{alive=false};
+    })(); return()=>{alive=false};
   },[token,state.spotifyClientId]);
 
   function update(patch){setState(s=>({...s,...patch}));}
-  function flash(msg){setNotice(msg);setTimeout(()=>setNotice(''),2600);}
-  function fail(msg){setError(msg);setTimeout(()=>setError(''),5000);}
+  function flash(msg){setNotice(msg);setTimeout(()=>setNotice(''),2600)}
+  function fail(msg){setError(msg);setTimeout(()=>setError(''),4500)}
   function logout(){localStorage.removeItem(TOKEN_KEY);setToken(null);setSpotifyUser(null);setPolling(false);flash('Spotify disconnected.');}
 
   async function ensureToken(){
-    let t=token;
-    if(!t) throw new Error('Connect Spotify first.');
-    if(t.expires_at < Date.now()+60000){
-      t=await refreshToken(t,state.spotifyClientId);
-      if(!t) throw new Error('Spotify session expired. Reconnect.');
-      setToken(t);
-    }
-    return t;
+    let t=token; if(!t) throw new Error('Connect Spotify first.');
+    if(t.expires_at < Date.now()+60000){t=await refreshToken(t,state.spotifyClientId); if(!t) throw new Error('Spotify session expired. Reconnect.'); setToken(t);} return t;
   }
 
   async function importPlaylist(){
@@ -203,22 +177,19 @@ function App(){
       const seen=new Set();
       const valid=raw.filter(track=>{ if(seen.has(track.spotifyId)) return false; seen.add(track.spotifyId); return true; });
       if(!valid.length) throw new Error('Spotify returned no playable tracks from this playlist.');
+      lastLiveTrackRef.current=null;
+      setNowPlaying(null);
       setState(s=>({...s,eventName:pl.name||s.eventName,playlistId:pid,songs:valid,history:[],active:false,startedAt:null,lastTrackId:null,lastPlayedAt:null}));
       const duplicates=raw.length-valid.length;
       flash(duplicates ? `Imported ${valid.length} unique songs (${duplicates} duplicate${duplicates===1?'':'s'} removed).` : `Imported ${valid.length} songs.`);
       setTab('setup');
-    }catch(e){fail(e.message);}
+    }catch(e){fail(e.message)}
   }
 
   function loadDemo(){
     const people=state.participants.length?state.participants:DEFAULT_PEOPLE.map(name=>({id:uid(),name}));
-    const songs=Array.from({length:50},(_,i)=>{
-      const base=DEMO_SONGS[i%DEMO_SONGS.length];
-      return {id:uid(),spotifyId:`demo-${i+1}`,name:i<DEMO_SONGS.length?base[0]:`${base[0]} ${Math.floor(i/DEMO_SONGS.length)+1}`,artist:base[1],ownerId:people[i%people.length]?.id||''};
-    });
-    setState(s=>({...s,eventName:'Friends Hot 50 – Demo',participants:people,songs,history:[],active:false,lastTrackId:null}));
-    flash('50-song demo loaded.');
-    setTab('setup');
+    const songs=Array.from({length:50},(_,i)=>{const base=DEMO_SONGS[i%DEMO_SONGS.length];return{id:uid(),spotifyId:`demo-${i+1}`,name:i<DEMO_SONGS.length?base[0]:`${base[0]} ${Math.floor(i/DEMO_SONGS.length)+1}`,artist:base[1],ownerId:people[i%people.length]?.id||''}});
+    setState(s=>({...s,eventName:'Friends Hot 50 – Demo',participants:people,songs,history:[],active:false,lastTrackId:null}));flash('50-song demo loaded.');setTab('setup');
   }
 
   function setOwner(songId,ownerId){
@@ -248,53 +219,54 @@ function App(){
     if(!state.playlistId) return true;
     return context?.uri === `spotify:playlist:${state.playlistId}`;
   }
+
   function startedAfterCountdown(playedAt){
     if(!state.startedAt) return false;
     return new Date(playedAt).getTime() >= new Date(state.startedAt).getTime() - 1500;
   }
 
-  function handleLiveTrack(current, startedAt){
-    const match=songMap[current?.item?.id];
-    if(!match || !startedAfterCountdown(startedAt) || !isCountdownContext(current.context)) return;
-    if(lastLiveTrackRef.current===current.item.id) return;
-    lastLiveTrackRef.current=current.item.id;
-    const livePos=Math.max(1,state.songs.length-state.history.length);
-    if(prizePositionsFor(state.songs.length).includes(livePos)){
-      setPrize({id:uid(),spotifyId:current.item.id,name:match.name,artist:match.artist,ownerId:match.ownerId,position:livePos,playedAt:startedAt,source:'live'});
+  async function updatePlayback({showNotice=false}={}){
+    try{
+      const t=await ensureToken();
+
+      if(state.startedAt){
+        const after=new Date(state.startedAt).getTime();
+        const recent=await spotifyFetch(`/me/player/recently-played?limit=50&after=${after}`,t);
+        const candidates=(recent?.items||[]).slice().reverse();
+        for(const item of candidates){
+          if(songMap[item.track?.id] && startedAfterCountdown(item.played_at) && isCountdownContext(item.context)){
+            recordTrack(item.track,item.played_at,'recent');
+          }
+        }
+      }
+
+      const current=await spotifyFetch('/me/player/currently-playing',t);
+      if(current?.item && songMap[current.item.id] && isCountdownContext(current.context)){
+        const currentStartedAt=new Date(Date.now()-(current.progress_ms||0)).toISOString();
+        if(!state.startedAt || startedAfterCountdown(currentStartedAt)){
+          setNowPlaying(current);
+        }else{
+          setNowPlaying(null);
+        }
+      }else{
+        setNowPlaying(null);
+      }
+
+      if(showNotice) flash('Spotify playback synced.');
+    }catch(e){
+      if(showNotice) fail(e.message);
+      else console.warn(e);
     }
   }
 
   async function syncSpotify(){
-    try{
-      const t=await ensureToken();
-      const after=state.startedAt ? `&after=${new Date(state.startedAt).getTime()}` : '';
-      const recent=await spotifyFetch(`/me/player/recently-played?limit=50${after}`,t);
-      const candidates=(recent?.items||[]).slice().reverse();
-      for(const item of candidates){
-        if(songMap[item.track?.id] && startedAfterCountdown(item.played_at) && isCountdownContext(item.context)){
-          recordTrack(item.track,item.played_at,'recent');
-        }
-      }
-      const current=await spotifyFetch('/me/player/currently-playing',t);
-      if(current?.item){
-        setNowPlaying(current.item);
-        handleLiveTrack(current,new Date(Date.now()-(current.progress_ms||0)).toISOString());
-      } else setNowPlaying(null);
-      flash('Spotify history synced.');
-    }catch(e){fail(e.message);}
+    await updatePlayback({showNotice:true});
   }
 
   async function pollOnce(){
     if(pollingRef.current)return;
     pollingRef.current=true;
-    try{
-      const t=await ensureToken();
-      const current=await spotifyFetch('/me/player/currently-playing',t);
-      if(current?.item){
-        setNowPlaying(current.item);
-        handleLiveTrack(current,new Date(Date.now()-(current.progress_ms||0)).toISOString());
-      } else setNowPlaying(null);
-    }catch(e){console.warn(e);}
+    try{ await updatePlayback(); }
     finally{pollingRef.current=false;}
   }
 
@@ -303,25 +275,30 @@ function App(){
     pollOnce();
     const id=setInterval(pollOnce,4000);
     return()=>clearInterval(id);
-  },[polling,token,state.songs,state.history.length,state.startedAt,state.playlistId]);
+  },[polling,token,state.songs,state.startedAt,state.playlistId]);
 
   async function startCountdown(){
     const unassigned=state.songs.filter(s=>!s.ownerId).length;
     if(!state.songs.length)return fail('Import or load songs first.');
     if(unassigned)return fail(`${unassigned} songs still need an owner.`);
-    const startTime=new Date().toISOString();
+
+    const startedAt=new Date().toISOString();
     lastLiveTrackRef.current=null;
+    setPrize(null);
     setNowPlaying(null);
-    setState(s=>({...s,history:[],active:true,startedAt:startTime,lastTrackId:null,lastPlayedAt:null}));
+    setState(s=>({...s,history:[],active:true,startedAt,lastTrackId:null,lastPlayedAt:null}));
+
     if(token){
       try{
         const t=await ensureToken();
         await spotifyFetch('/me/player/shuffle?state=true',t,{method:'PUT'});
         flash('Countdown started — Spotify shuffle is ON.');
       }catch(e){
-        fail(`Countdown started, but I could not switch Spotify shuffle on automatically. Turn Shuffle on in Spotify. ${e.message}`);
+        fail(`Countdown started, but Spotify shuffle could not be changed: ${e.message}`);
       }
-    } else flash('Countdown started. Turn Shuffle on in Spotify.');
+    }else{
+      flash('Countdown started.');
+    }
     setPolling(!!token);
     setTab('countdown');
   }
@@ -329,36 +306,58 @@ function App(){
   function resetCountdown(){
     if(confirm('Reset the played-song history and start again?')){
       lastLiveTrackRef.current=null;
+      setPrize(null);
       setState(s=>({...s,history:[],active:false,startedAt:null,lastTrackId:null,lastPlayedAt:null}));
       setPolling(false);
       setNowPlaying(null);
     }
   }
+
   function simulateNext(){
-    const left=state.songs.filter(s=>!state.history.some(h=>h.spotifyId===s.spotifyId));
-    if(!left.length)return;
-    const pick=left[Math.floor(Math.random()*left.length)];
-    recordTrack({id:pick.spotifyId},new Date().toISOString(),'demo');
+    const left=state.songs.filter(s=>!state.history.some(h=>h.spotifyId===s.spotifyId)); if(!left.length)return;
+    const pick=left[Math.floor(Math.random()*left.length)];recordTrack({id:pick.spotifyId},new Date().toISOString(),'demo');
   }
   function undoLast(){setState(s=>({...s,history:s.history.slice(0,-1)}));}
   function exportResults(){
     const rows=[['Position','Song','Artist','Nominated by','Played at'],...state.history.map(h=>[h.position,h.name,h.artist,ownerMap[h.ownerId]||'',h.playedAt])];
     const csv=rows.map(r=>r.map(v=>`"${String(v??'').replaceAll('"','""')}"`).join(',')).join('\n');
-    const a=document.createElement('a');
-    a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
-    a.download=`${state.eventName.replace(/[^a-z0-9]+/gi,'-').toLowerCase()}-results.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download=`${state.eventName.replace(/[^a-z0-9]+/gi,'-').toLowerCase()}-results.csv`;a.click();URL.revokeObjectURL(a.href);
   }
 
   const assigned=state.songs.filter(s=>s.ownerId).length;
   const assignmentCounts=useMemo(()=>Object.fromEntries(state.participants.map(p=>[p.id,state.songs.filter(song=>song.ownerId===p.id).length])),[state.participants,state.songs]);
   const activePrizes=useMemo(()=>prizePositionsFor(state.songs.length),[state.songs.length]);
   const latest=state.history[state.history.length-1];
-  const liveSong = nowPlaying?.id ? state.songs.find(s=>s.spotifyId===nowPlaying.id) : null;
-  const livePosition=Math.max(1,state.songs.length-state.history.length);
-  const displayEntry = liveSong ? {spotifyId:liveSong.spotifyId,name:liveSong.name,artist:liveSong.artist,ownerId:liveSong.ownerId,position:livePosition} : latest;
+  const liveSong = nowPlaying?.item?.id ? state.songs.find(s=>s.spotifyId===nowPlaying.item.id) : null;
+  const liveAlreadyCompleted = !!(liveSong && state.history.some(h=>h.spotifyId===liveSong.spotifyId));
+  const hasLiveCountdownSong = !!(state.active && liveSong && !liveAlreadyCompleted);
+  const completedCount=state.history.length;
+  const songsPlayed=completedCount + (hasLiveCountdownSong ? 1 : 0);
+  const livePosition=hasLiveCountdownSong ? Math.max(1,state.songs.length-completedCount) : null;
+  const displayEntry = hasLiveCountdownSong
+    ? {spotifyId:liveSong.spotifyId,name:liveSong.name,artist:liveSong.artist,ownerId:liveSong.ownerId,position:livePosition}
+    : latest;
   const currentPosition=displayEntry?.position || (state.songs.length||50);
+  const stillToPlay=Math.max(0,state.songs.length-songsPlayed);
+  const prizesAhead=activePrizes.filter(p=>{
+    if(hasLiveCountdownSong && p===livePosition) return false;
+    return p < currentPosition && !state.history.some(h=>h.position===p);
+  }).length;
+
+  useEffect(()=>{
+    if(!hasLiveCountdownSong || !liveSong || !livePosition) return;
+    if(lastLiveTrackRef.current===liveSong.spotifyId) return;
+    lastLiveTrackRef.current=liveSong.spotifyId;
+    if(activePrizes.includes(livePosition)){
+      setPrize({
+        id:uid(),spotifyId:liveSong.spotifyId,name:liveSong.name,artist:liveSong.artist,
+        ownerId:liveSong.ownerId,position:livePosition,playedAt:new Date().toISOString(),source:'live'
+      });
+    }else{
+      setPrize(null);
+    }
+  },[hasLiveCountdownSong,liveSong?.spotifyId,livePosition,activePrizes.join(',')]);
+
 
   return <div className="app-shell">
     <header className="topbar">
@@ -383,43 +382,54 @@ function App(){
             <div className="nominee"><span>Nominated by</span><strong>{ownerMap[displayEntry.ownerId]||'Unassigned'}</strong></div>
           </> : <>
             <h1>{state.songs.length ? 'The next song is a surprise.' : 'Build your countdown.'}</h1>
-            <p className="artist">{state.songs.length ? 'Spotify keeps shuffling. The app reveals the live song but never the upcoming queue.' : 'Import your Spotify playlist, assign each song, then start the party.'}</p>
+            <p className="artist">{state.songs.length ? 'Spotify keeps shuffling. The app reveals the song that is playing now, but never the upcoming queue.' : 'Import your Spotify playlist, assign each song, then start the party.'}</p>
           </>}
-          <div className="hero-stats"><div><b>{state.history.length}</b><span>completed</span></div><div><b>{remaining||state.songs.length}</b><span>remaining incl. current</span></div><div><b>{activePrizes.filter(p=>p<=currentPosition && !state.history.some(h=>h.position===p)).length}</b><span>prizes ahead</span></div></div>
+          <div className="hero-stats">
+            <div><b>{songsPlayed}</b><span>played / playing</span></div>
+            <div><b>{completedCount}</b><span>completed</span></div>
+            <div><b>{stillToPlay}</b><span>still to play</span></div>
+            <div><b>{prizesAhead}</b><span>prizes ahead</span></div>
+          </div>
           <div className="hero-buttons">
             {!state.active?<button className="primary" onClick={startCountdown}><Play size={18}/> Start countdown</button>:<button className="primary" onClick={()=>setPolling(p=>!p)}>{polling?<Pause size={18}/>:<Play size={18}/>} {polling?'Pause tracking':'Resume tracking'}</button>}
             {token&&<button className="secondary" onClick={syncSpotify}><RotateCcw size={18}/> Sync history</button>}
             {!token&&state.songs.some(s=>s.spotifyId.startsWith('demo-'))&&<button className="secondary" onClick={simulateNext}><Shuffle size={18}/> Play random demo song</button>}
           </div>
-          {nowPlaying&&<div className="now-playing"><Volume2 size={16}/><span>Spotify now playing: <b>{nowPlaying.name}</b> — {nowPlaying.artists?.map(a=>a.name).join(', ')}{liveSong ? ` · live countdown #${livePosition}` : ' · not in master playlist'}</span></div>}
+          {nowPlaying?.item&&<div className="now-playing"><Volume2 size={16}/><span>Spotify now playing: <b>{nowPlaying.item.name}</b> — {nowPlaying.item.artists?.map(a=>a.name).join(', ')}{hasLiveCountdownSong ? ` · countdown #${livePosition}` : ' · not counted in this countdown'}</span></div>}
         </div>
 
         <aside className="side-card prizes-card"><div className="section-title"><Trophy size={18}/> Prize positions</div>
           <div className="prize-list">{activePrizes.map(p=>{
             const hit=state.history.find(h=>h.position===p);
-            const liveHit=liveSong && livePosition===p ? liveSong : null;
-            return <div className={`prize-row ${hit||liveHit?'hit':''}`} key={p}><div className="prize-num">#{p}</div><div><strong>{p===1?'Countdown champion':p<=3?'Podium prize':'Prize song'}</strong><span>{hit?`${hit.name} · ${ownerMap[hit.ownerId]||''}`:liveHit?`${liveHit.name} · LIVE`:'Still a surprise'}</span></div>{hit||liveHit?<CheckCircle2 size={18}/>:<Sparkles size={18}/>}</div>
+            const liveHit=hasLiveCountdownSong && livePosition===p ? liveSong : null;
+            return <div className={`prize-row ${hit||liveHit?'hit':''}`} key={p}>
+              <div className="prize-num">#{p}</div>
+              <div><strong>{p===1?'Countdown champion':p<=3?'Podium prize':'Prize song'}</strong>
+                <span>{hit?`${hit.name} · ${ownerMap[hit.ownerId]||''}`:liveHit?`${liveHit.name} · ${ownerMap[liveHit.ownerId]||''} · LIVE`:'Still a surprise'}</span>
+              </div>
+              {hit||liveHit?<CheckCircle2 size={18}/>:<Sparkles size={18}/>} 
+            </div>
           })}</div>
         </aside>
 
         <div className="history-card"><div className="section-head"><div className="section-title"><ListMusic size={18}/> Countdown so far</div><div className="history-actions">{state.history.length>0&&<button className="text-btn" onClick={undoLast}>Undo last</button>}<button className="text-btn" onClick={exportResults}><Download size={15}/> Export</button></div></div>
-          {state.history.length===0?<div className="empty"><Music2 size={34}/><strong>No completed songs yet</strong><span>The live track is shown above. Completed tracks appear here once Spotify adds them to Recently Played.</span></div>:
+          {state.history.length===0?<div className="empty"><Music2 size={34}/><strong>No completed songs yet</strong><span>The live track is shown above. Completed tracks appear here when Spotify adds them to Recently Played.</span></div>:
           <div className="history-list">{[...state.history].reverse().map((h,i)=><div className={`history-row ${i===0?'latest':''}`} key={h.id}><div className="history-rank">#{h.position}</div><div className="track-main"><strong>{h.name}</strong><span>{h.artist}</span></div><div className="owner-chip">{ownerMap[h.ownerId]||'—'}</div><time>{formatTime(h.playedAt)}</time></div>)}</div>}
         </div>
       </section>}
 
       {tab==='setup' && <section className="setup-layout">
-        <div className="panel setup-panel"><div className="section-title"><Users size={18}/> Friends</div><p className="muted">Each person can nominate up to 10 songs, but there is no minimum. The countdown length is the number of unique songs in the master playlist.</p>
-          <div className="people-list">{state.participants.map((p,i)=><div className="person-row" key={p.id}><span>{i+1}</span><input value={p.name} onChange={e=>renameParticipant(p.id,e.target.value)}/><div className={`song-count ${assignmentCounts[p.id]>=MAX_SONGS_PER_PERSON?'full-count':''}`}>{assignmentCounts[p.id]||0} song{(assignmentCounts[p.id]||0)===1?'':'s'} assigned · max {MAX_SONGS_PER_PERSON}</div><button className="icon-btn small" onClick={()=>removeParticipant(p.id)}><Trash2 size={16}/></button></div>)}</div>
+        <div className="panel setup-panel"><div className="section-title"><Users size={18}/> Friends</div><p className="muted">Each person can nominate up to 10 songs, but there is no minimum.</p>
+          <div className="people-list">{state.participants.map((p,i)=><div className="person-row" key={p.id}><span>{i+1}</span><input value={p.name} onChange={e=>renameParticipant(p.id,e.target.value)}/><span className="assignment-count">{assignmentCounts[p.id]||0} song{assignmentCounts[p.id]===1?'':'s'} assigned · max 10</span><button className="icon-btn small" onClick={()=>removeParticipant(p.id)}><Trash2 size={16}/></button></div>)}</div>
           <button className="secondary full" onClick={addParticipant}><Plus size={17}/> Add friend</button>
         </div>
-        <div className="panel songs-panel"><div className="section-head"><div><div className="section-title"><ListMusic size={18}/> Playlist songs</div><p className="muted">{assigned}/{state.songs.length} assigned · maximum {MAX_SONGS_PER_PERSON} per person · no minimum</p></div><button className="primary compact" onClick={startCountdown}><Play size={16}/> Start</button></div>
-          {!state.songs.length?<div className="empty"><ListMusic size={34}/><strong>No playlist imported</strong><span>Connect Spotify and import your playlist, or load the demo.</span><button className="secondary" onClick={loadDemo}>Load 50-song demo</button></div>:
-          <div className="song-table">{state.songs.map((s,i)=><div className="song-row" key={s.id}><span className="song-index">{i+1}</span><div className="track-main"><strong>{s.name}</strong><span>{s.artist}</span></div><select value={s.ownerId} onChange={e=>setOwner(s.id,e.target.value)}><option value="">Choose owner…</option>{state.participants.map(p=><option value={p.id} key={p.id} disabled={(assignmentCounts[p.id]||0)>=MAX_SONGS_PER_PERSON && s.ownerId!==p.id}>{p.name} — {assignmentCounts[p.id]||0} assigned (max {MAX_SONGS_PER_PERSON})</option>)}</select></div>)}</div>}
+        <div className="panel songs-panel"><div className="section-head"><div><div className="section-title"><ListMusic size={18}/> Playlist songs</div><p className="muted">{assigned}/{state.songs.length} assigned · countdown size {state.songs.length}</p></div><button className="primary compact" onClick={startCountdown}><Play size={16}/> Start</button></div>
+          {!state.songs.length?<div className="empty"><ListMusic size={34}/><strong>No playlist imported</strong><span>Connect Spotify and import your playlist, or load the demo to try the full flow.</span><button className="secondary" onClick={loadDemo}>Load 50-song demo</button></div>:
+          <div className="song-table">{state.songs.map((s,i)=><div className="song-row" key={s.id}><span className="song-index">{i+1}</span><div className="track-main"><strong>{s.name}</strong><span>{s.artist}</span></div><select value={s.ownerId} onChange={e=>setOwner(s.id,e.target.value)}><option value="">Choose owner…</option>{state.participants.map(p=><option value={p.id} key={p.id}>{p.name} — {assignmentCounts[p.id]||0} assigned (max 10)</option>)}</select></div>)}</div>}
         </div>
       </section>}
 
-      {tab==='import' && <section className="import-wrap"><div className="panel import-panel"><div className="import-icon"><Music2 size={32}/></div><h2>Import your master Spotify playlist</h2><p>Paste the playlist you own containing everyone’s nominated songs. People can contribute any number up to 10.</p>
+      {tab==='import' && <section className="import-wrap"><div className="panel import-panel"><div className="import-icon"><Music2 size={32}/></div><h2>Import your Spotify playlist</h2><p>Paste your master playlist link. We import the songs once, then the live countdown watches what has already started playing — never the upcoming queue.</p>
         <label>Spotify playlist URL or ID</label><input className="big-input" placeholder="https://open.spotify.com/playlist/..." value={state.playlistId} onChange={e=>update({playlistId:e.target.value})}/>
         <button className="primary full big" onClick={importPlaylist} disabled={!token}><Upload size={18}/> Import playlist</button>
         {!token&&<div className="helper">Connect Spotify in Settings first, or <button className="link" onClick={loadDemo}>load the 50-song demo</button>.</div>}
@@ -442,7 +452,7 @@ function App(){
     </div></div>}
 
     {prize&&<div className="celebration" onClick={()=>setPrize(null)}><div className="burst">✦</div><Trophy size={64}/><div className="eyebrow">PRIZE SONG!</div><div className="celebration-rank">#{prize.position}</div><h2>{prize.name}</h2><p>{prize.artist}</p><div className="winner-name">{ownerMap[prize.ownerId]}</div><span>Tap anywhere to continue</span></div>}
-  </div>;
+  </div>
 }
 
 createRoot(document.getElementById('root')).render(<App/>);
