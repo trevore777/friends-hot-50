@@ -22,15 +22,20 @@ function injectStyles(){
     #${PANEL_ID} .ba-action:disabled{opacity:.45;cursor:not-allowed}
     #${PANEL_ID} .ba-status{margin-left:auto;color:#b9d2c1;font-weight:700}
 
-    .song-row.bulk-selectable{cursor:pointer;position:relative}
+    .song-row.bulk-selectable{position:relative}
     .song-row.bulk-selected{background:rgba(34,220,107,.11);outline:2px solid rgba(34,220,107,.55);outline-offset:-2px;border-radius:12px}
-    .bulk-song-toggle{width:34px;height:34px;border-radius:10px;border:2px solid #86a293;background:#f4f4f4;color:transparent;display:grid;place-items:center;font-size:21px;font-weight:950;line-height:1;flex:0 0 auto;padding:0;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+    .bulk-song-toggle{border:1px solid #2b6946;background:#0b2718;color:#effff4;border-radius:12px;padding:10px 14px;font-weight:850;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
     .bulk-song-toggle.selected{background:#22dc6b;border-color:#22dc6b;color:#031108}
 
     @media(max-width:700px){
       #${PANEL_ID} .ba-status{width:100%;margin-left:0}
-      .bulk-song-toggle{width:44px;height:44px;border-radius:13px;font-size:25px}
-      .song-row.bulk-selectable{min-height:104px;padding:14px 8px!important}
+      .song-row.bulk-selectable{padding:14px 10px!important;display:grid!important;grid-template-columns:1fr!important;gap:10px!important;min-height:0!important}
+      .song-row.bulk-selectable .song-index{display:none!important}
+      .song-row.bulk-selectable .track-main{grid-column:1!important;width:100%!important}
+      .song-row.bulk-selectable .track-main strong{font-size:18px!important;white-space:normal!important;overflow:visible!important;text-overflow:clip!important;line-height:1.25!important}
+      .song-row.bulk-selectable .track-main span{font-size:14px!important;white-space:normal!important}
+      .song-row.bulk-selectable .bulk-song-toggle{grid-column:1!important;width:100%!important;min-height:52px!important;font-size:16px!important;margin:0!important}
+      .song-row.bulk-selectable select{grid-column:1!important;width:100%!important;min-height:48px!important}
       .song-row.bulk-selected{background:rgba(34,220,107,.14)}
     }
   `;
@@ -44,7 +49,7 @@ function toggleSong(panel,row,songId,button){
   const isSelected=selected.has(songId);
   row.classList.toggle('bulk-selected',isSelected);
   button.classList.toggle('selected',isSelected);
-  button.textContent=isSelected?'✓':'';
+  button.textContent=isSelected?'✓ Selected':'Select this song';
   button.setAttribute('aria-pressed',isSelected?'true':'false');
   updateStatus(panel,getState());
 }
@@ -70,7 +75,7 @@ function buildPanel(){
 
   panel.innerHTML=`
     <div class="ba-title">Quick assign songs</div>
-    <div class="ba-help">1. Choose a friend. 2. Tap each of their songs so it turns green. 3. Press <b>Assign selected</b>. Each friend can have up to 10 songs.</div>
+    <div class="ba-help">1. Choose a friend. 2. Tap <b>Select this song</b> on each of their songs. 3. Press <b>Assign selected</b>. Each friend can have up to 10 songs.</div>
     <div class="ba-people"></div>
     <div class="ba-toolbar">
       <button class="ba-action" data-action="unassigned">Select all unassigned</button>
@@ -94,31 +99,30 @@ function buildPanel(){
     if(!song) return;
 
     row.querySelector('.bulk-song-check')?.remove();
-    let toggle=row.querySelector('.bulk-song-toggle');
-    if(!toggle){
-      toggle=document.createElement('button');
-      toggle.type='button';
-      toggle.className='bulk-song-toggle';
-      toggle.setAttribute('aria-label',`Select ${song.name}`);
-      row.insertBefore(toggle,row.firstChild);
-    }
+    row.querySelector('.bulk-song-toggle')?.remove();
+
+    const toggle=document.createElement('button');
+    toggle.type='button';
+    toggle.className='bulk-song-toggle';
+    toggle.setAttribute('aria-label',`Select ${song.name}`);
 
     const isSelected=selectedIds.has(song.id);
     toggle.classList.toggle('selected',isSelected);
-    toggle.textContent=isSelected?'✓':'';
+    toggle.textContent=isSelected?'✓ Selected':'Select this song';
     toggle.setAttribute('aria-pressed',isSelected?'true':'false');
     row.classList.toggle('bulk-selected',isSelected);
     row.classList.add('bulk-selectable');
 
+    const trackMain=row.querySelector('.track-main');
+    if(trackMain && trackMain.nextSibling){
+      row.insertBefore(toggle,trackMain.nextSibling);
+    }else{
+      row.appendChild(toggle);
+    }
+
     toggle.onclick=(e)=>{
       e.preventDefault();
       e.stopPropagation();
-      toggleSong(panel,row,song.id,toggle);
-    };
-
-    row.onclick=(e)=>{
-      if(e.target.closest('select,option,button:not(.bulk-song-toggle)')) return;
-      if(e.target===toggle) return;
       toggleSong(panel,row,song.id,toggle);
     };
   });
