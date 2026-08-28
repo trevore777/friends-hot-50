@@ -1,29 +1,31 @@
-/* iPhone/mobile refinements for Friends Hot 50 */
-@media (max-width: 600px) {
+/* Responsive phone/tablet refinements for Friends Hot 50 */
+@media (max-width: 1000px) {
   html,body{width:100%;overflow-x:hidden}
   body{-webkit-text-size-adjust:100%}
   .app-shell{padding-bottom:calc(125px + env(safe-area-inset-bottom))!important}
-  main{width:100%;padding:10px!important;overflow-x:hidden}
+  main{width:100%;padding:12px!important;overflow-x:hidden}
 
   .topbar{height:64px!important;padding:0 12px!important}
   .brand{min-width:0;flex:1}
   .brandmark{flex:0 0 40px}
-  .brand strong{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
+  .brand strong{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}
 
-  .setup-layout{display:block!important;width:100%}
-  .setup-layout>*{width:100%;min-width:0}
-  .panel,.setup-panel,.songs-panel{width:100%!important;min-width:0!important;border-radius:18px!important;padding:14px!important;margin:0 0 12px!important}
+  /* Switch setup from the desktop two-column layout to a single stacked layout. */
+  .setup-layout{display:block!important;width:100%!important;max-width:100%!important}
+  .setup-layout>*{width:100%!important;max-width:100%!important;min-width:0!important}
+  .panel,.setup-panel,.songs-panel{width:100%!important;max-width:100%!important;min-width:0!important;border-radius:18px!important;padding:16px!important;margin:0 0 14px!important}
   .songs-panel{order:initial!important}
   .setup-panel{order:initial!important}
-  .section-head{align-items:flex-start;flex-wrap:wrap}
-  .section-head .primary.compact{width:100%;min-height:46px}
+  .section-head{align-items:flex-start!important;flex-wrap:wrap!important}
+  .section-head .primary.compact{width:100%!important;min-height:46px!important}
 
   /* Quick assign card inserted by bulk-assign.js */
   #bulk-song-assignment{
     width:100%!important;
+    max-width:100%!important;
     min-width:0!important;
     margin:10px 0 14px!important;
-    padding:13px!important;
+    padding:14px!important;
     border-radius:16px!important;
   }
   #bulk-song-assignment .ba-title{font-size:18px!important;margin-bottom:5px!important}
@@ -68,51 +70,110 @@
     line-height:1.3!important;
   }
 
-  /* Friend editor */
-  .people-list{gap:10px;margin:12px 0}
-  .person-row{grid-template-columns:26px minmax(0,1fr) 40px!important;gap:7px!important;padding-bottom:10px;border-bottom:1px solid #183023}
-  .person-row input{min-width:0;font-size:16px;min-height:44px}
-  .person-row .assignment-count,.person-row .song-count{grid-column:2/-1!important;justify-self:stretch!important;text-align:left!important;width:100%;padding:7px 10px}
-
-  /* Each song becomes a readable mobile card */
-  .song-table{max-height:none!important;overflow:visible!important;padding:0!important;margin-top:8px!important}
-  .song-row,.song-row.bulk-selectable{
+  /* Friend editor: full-width editable name field, count below, delete button at right. */
+  .people-list{gap:12px!important;margin:12px 0!important}
+  .person-row{
     display:grid!important;
-    grid-template-columns:38px minmax(0,1fr)!important;
-    gap:5px 10px!important;
+    grid-template-columns:28px minmax(0,1fr) 46px!important;
+    grid-template-rows:auto auto!important;
+    gap:7px 10px!important;
     width:100%!important;
-    padding:13px 2px!important;
+    align-items:center!important;
+    padding:8px 0 12px!important;
+    border-bottom:1px solid #183023!important;
+  }
+  .person-row>span:first-child{grid-column:1!important;grid-row:1!important}
+  .person-row input{
+    grid-column:2!important;
+    grid-row:1!important;
+    width:100%!important;
+    min-width:0!important;
+    min-height:48px!important;
+    font-size:16px!important;
+    padding:10px 12px!important;
+  }
+  .person-row .icon-btn,.person-row button{
+    grid-column:3!important;
+    grid-row:1!important;
+    width:44px!important;
+    height:44px!important;
+    justify-self:end!important;
+  }
+  .person-row .assignment-count,.person-row .song-count{
+    grid-column:2/4!important;
+    grid-row:2!important;
+    justify-self:stretch!important;
+    text-align:left!important;
+    width:100%!important;
+    max-width:none!important;
+    padding:7px 10px!important;
+  }
+
+  /* Each song becomes a readable stacked card. */
+  .song-table{max-height:none!important;overflow:visible!important;padding:0!important;margin-top:8px!important;width:100%!important}
+  .songs-panel .song-row,.songs-panel .song-row.bulk-selectable{
+    display:grid!important;
+    grid-template-columns:32px minmax(0,1fr)!important;
+    grid-template-rows:auto auto auto!important;
+    gap:7px 10px!important;
+    width:100%!important;
+    max-width:100%!important;
+    min-width:0!important;
+    padding:14px 2px!important;
     align-items:center!important;
     border-bottom:1px solid #183023!important;
   }
-  .song-row.bulk-selected{background:rgba(34,220,107,.08)!important;border-radius:12px!important;padding-left:7px!important;padding-right:7px!important}
-  .song-row .bulk-song-check{
+  .songs-panel .song-row.bulk-selected{background:rgba(34,220,107,.08)!important;border-radius:12px!important;padding-left:8px!important;padding-right:8px!important}
+  .songs-panel .song-row .song-index{
+    display:block!important;
     grid-column:1!important;
     grid-row:1!important;
-    width:28px!important;
-    height:28px!important;
-    margin:0 auto!important;
-    accent-color:#22dc6b!important;
+    font-size:12px!important;
+    text-align:center!important;
   }
-  .song-row .song-index{grid-column:1!important;grid-row:2!important;font-size:12px!important;text-align:center!important}
-  .song-row .track-main{grid-column:2!important;grid-row:1/span 2!important;min-width:0!important}
-  .song-row .track-main strong,.song-row .track-main span{
+  .songs-panel .song-row .track-main{
+    grid-column:2!important;
+    grid-row:1!important;
+    width:100%!important;
+    min-width:0!important;
+  }
+  .songs-panel .song-row .track-main strong,.songs-panel .song-row .track-main span{
+    display:block!important;
     white-space:normal!important;
     overflow:visible!important;
     text-overflow:clip!important;
-    word-break:break-word!important;
+    overflow-wrap:anywhere!important;
+    word-break:normal!important;
   }
-  .song-row .track-main strong{font-size:16px!important;line-height:1.22!important}
-  .song-row .track-main span{font-size:13px!important;line-height:1.25!important;margin-top:3px!important}
-  .song-row select{
+  .songs-panel .song-row .track-main strong{font-size:17px!important;line-height:1.25!important}
+  .songs-panel .song-row .track-main span{font-size:14px!important;line-height:1.3!important;margin-top:3px!important}
+  .songs-panel .song-row .bulk-song-toggle{
+    grid-column:1/-1!important;
+    grid-row:2!important;
+    width:100%!important;
+    max-width:100%!important;
+    min-width:0!important;
+    min-height:50px!important;
+    margin:4px 0 0!important;
+    padding:10px 12px!important;
+    font-size:16px!important;
+    white-space:normal!important;
+  }
+  .songs-panel .song-row select{
     grid-column:1/-1!important;
     grid-row:3!important;
     width:100%!important;
     min-width:0!important;
-    min-height:46px!important;
+    min-height:48px!important;
     padding:10px 12px!important;
     font-size:16px!important;
-    margin-top:5px!important;
+    margin-top:0!important;
+  }
+  .songs-panel .song-row a.icon-btn{
+    grid-column:1!important;
+    grid-row:3!important;
+    width:44px!important;
+    height:44px!important;
   }
 
   .bottom-nav{
@@ -120,12 +181,14 @@
     padding:7px 6px calc(7px + env(safe-area-inset-bottom))!important;
   }
   .bottom-nav button{width:32%!important;min-width:0!important}
-  .toast{top:70px!important;width:calc(100% - 24px)!important;text-align:center;border-radius:14px!important}
+  .toast{top:70px!important;width:calc(100% - 24px)!important;text-align:center!important;border-radius:14px!important}
 }
 
-@media(max-width:380px){
+@media(max-width:500px){
+  main{padding:10px!important}
+  .panel,.setup-panel,.songs-panel{padding:14px!important}
   #bulk-song-assignment .ba-people{grid-template-columns:1fr!important}
   #bulk-song-assignment .ba-toolbar{grid-template-columns:1fr!important}
   #bulk-song-assignment .ba-action.primary,#bulk-song-assignment .ba-status{grid-column:1!important}
-  .brand strong{max-width:175px}
+  .brand strong{max-width:190px}
 }
