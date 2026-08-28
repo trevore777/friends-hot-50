@@ -226,8 +226,19 @@ function App() {
       observedTrackRef.current = null;
       setNowPlaying(null);
       setPolling(false);
-      setState(s => ({ ...s, eventName: playlist?.name || s.eventName, playlistId, songs, history: [], active: false, startedAt: null }));
-      flash(`Imported ${songs.length} unique songs.`);
+      setState(s => ({
+        ...s,
+        eventName: playlist?.name || 'Friends Hot 50',
+        playlistId,
+        participants: [],
+        songs,
+        history: [],
+        active: false,
+        startedAt: null,
+        lastTrackId: null,
+        lastPlayedAt: null
+      }));
+      flash(`Started new event: ${playlist?.name || 'Spotify playlist'} · ${songs.length} songs imported. Add the people for this event.`);
       setTab('setup');
     } catch (e) { fail(e.message); }
   }
