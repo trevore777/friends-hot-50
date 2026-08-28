@@ -141,6 +141,7 @@ function App() {
   const [error, setError] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const pollingRef = useRef(false);
+  const observedTrackRef = useRef(null);
 
   useEffect(() => saveState(state), [state]);
 
@@ -222,6 +223,7 @@ function App() {
           spotifyUrl: track.external_urls?.spotify || '', ownerId: ''
         }));
       if (!songs.length) throw new Error('No playable songs were found in that playlist.');
+      observedTrackRef.current = null;
       setNowPlaying(null);
       setPolling(false);
       setState(s => ({ ...s, eventName: playlist?.name || s.eventName, playlistId, songs, history: [], active: false, startedAt: null }));
@@ -248,37 +250,72 @@ function App() {
     setState(s => ({ ...s, participants: s.participants.filter(p => p.id !== id), songs: s.songs.map(song => song.ownerId === id ? { ...song, ownerId: '' } : song) }));
   }
 
-  function recordTrack(track, playedAt = new Date().toISOString()) {
+  function recordTracks(entries = []) {
+    if (!entries.length) return;
     setState(s => {
-      if (!track?.id || s.history.some(item => item.spotifyId === track.id)) return s;
-      const song = s.songs.find(item => item.spotifyId === track.id);
-      if (!song) return s;
-      const position = s.songs.length - s.history.length;
-      const entry = {
-        id: uid(), spotifyId: song.spotifyId, name: song.name, artist: song.artist,
-        ownerId: song.ownerId, position, playedAt
-      };
-      return { ...s, history: [...s.history, entry], lastTrackId: song.spotifyId, lastPlayedAt: playedAt };
+      const nextHistory = [...s.history];
+      const recorded = new Set(nextHistory.map(item => item.spotifyId));
+      let lastPlayedAt = s.lastPlayedAt;
+      let lastTrackId = s.lastTrackId;
+
+      entries.forEach(({ track, playedAt }) => {
+        if (!track?.id || recorded.has(track.id)) return;
+        const song = s.songs.find(item => item.spotifyId === track.id);
+        if (!song) return;
+        const position = s.songs.length - nextHistory.length;
+        if (position < 1) return;
+        const when = playedAt || new Date().toISOString();
+        nextHistory.push({
+          id: uid(), spotifyId: song.spotifyId, name: song.name, artist: song.artist,
+          ownerId: song.ownerId, position, playedAt: when
+        });
+        recorded.add(song.spotifyId);
+        lastTrackId = song.spotifyId;
+        lastPlayedAt = when;
+      });
+
+      if (nextHistory.length === s.history.length) return s;
+      return { ...s, history: nextHistory, lastTrackId, lastPlayedAt };
     });
   }
 
   async function updatePlayback(showNotice = false) {
     try {
       const activeToken = await ensureToken();
+      const current = await spotifyFetch('/me/player/currently-playing', activeToken);
+      const currentTrack = current?.item?.type === 'track' && songMap[current.item.id] ? current.item : null;
+      const previousObserved = observedTrackRef.current;
+      let recovered = [];
+
       if (state.startedAt) {
         const after = new Date(state.startedAt).getTime();
         const recent = await spotifyFetch(`/me/player/recently-played?limit=50&after=${after}`, activeToken);
-        const chronological = (recent?.items || []).slice().reverse();
-        chronological.forEach(item => {
-          if (item?.track?.id && songMap[item.track.id] && new Date(item.played_at).getTime() >= after - 1500) {
-            recordTrack(item.track, item.played_at);
-          }
-        });
+        recovered = (recent?.items || [])
+          .slice()
+          .reverse()
+          .filter(item => item?.track?.id && songMap[item.track.id] && new Date(item.played_at).getTime() >= after - 1500)
+          .map(item => ({ track: item.track, playedAt: item.played_at }));
       }
-      const current = await spotifyFetch('/me/player/currently-playing', activeToken);
-      if (current?.item?.id && songMap[current.item.id]) setNowPlaying(current);
-      else setNowPlaying(null);
-      if (showNotice) flash('Played-song history synced from Spotify.');
+
+      if (currentTrack && previousObserved?.track?.id && previousObserved.track.id !== currentTrack.id) {
+        const previousAlreadyRecovered = recovered.some(entry => entry.track.id === previousObserved.track.id);
+        if (!previousAlreadyRecovered) {
+          recovered.unshift({ track: previousObserved.track, playedAt: new Date().toISOString() });
+        }
+      }
+
+      recordTracks(recovered);
+
+      if (currentTrack) {
+        setNowPlaying(current);
+        observedTrackRef.current = { track: currentTrack, seenAt: Date.now() };
+      } else {
+        setNowPlaying(null);
+      }
+
+      if (showNotice) {
+        flash(recovered.length ? 'Spotify playback synced and missed songs recovered.' : 'Spotify playback is up to date.');
+      }
     } catch (e) {
       if (showNotice) fail(e.message);
       else console.warn(e);
@@ -294,7 +331,7 @@ function App() {
   useEffect(() => {
     if (!polling) return;
     pollOnce();
-    const timer = setInterval(pollOnce, 4000);
+    const timer = setInterval(pollOnce, 2000);
     return () => clearInterval(timer);
   }, [polling, token?.access_token, state.startedAt, state.playlistId, state.songs.length]);
 
@@ -304,15 +341,17 @@ function App() {
     if (unassigned) return fail(`${unassigned} song${unassigned === 1 ? '' : 's'} still need an owner.`);
     if (!token) return fail('Connect Spotify before starting the countdown.');
     const startedAt = new Date().toISOString();
+    observedTrackRef.current = null;
     setState(s => ({ ...s, history: [], active: true, startedAt, lastTrackId: null, lastPlayedAt: null }));
     setNowPlaying(null);
     setPolling(true);
     setTab('countdown');
-    flash('Tracking started. Keep playing the playlist on Shuffle in Spotify.');
+    flash('Tracking started. Spotify track changes are now being watched live.');
   }
 
   function resetCountdown() {
     if (!confirm('Clear the played-song history and start again?')) return;
+    observedTrackRef.current = null;
     setState(s => ({ ...s, history: [], active: false, startedAt: null, lastTrackId: null, lastPlayedAt: null }));
     setPolling(false);
     setNowPlaying(null);
@@ -334,6 +373,7 @@ function App() {
 
   function logout() {
     localStorage.removeItem(TOKEN_KEY);
+    observedTrackRef.current = null;
     setToken(null); setSpotifyUser(null); setPolling(false);
     flash('Spotify disconnected.');
   }
@@ -384,7 +424,7 @@ function App() {
             {token && <button className="secondary" onClick={() => updatePlayback(true)}><RotateCcw size={18}/> Sync played songs</button>}
           </div>
           {state.songs.length > 0 && !state.active && <div className="now-playing"><Music2 size={16}/><span><b>Before starting:</b> open this playlist in Spotify, press Shuffle, start playback, then return here and press Start tracking.</span></div>}
-          {nowPlaying?.item && <div className="now-playing"><Volume2 size={16}/><span>Now playing: <b>{nowPlaying.item.name}</b> — {nowPlaying.item.artists?.map(a => a.name).join(', ')}{livePosition ? ` · countdown #${livePosition}` : ''}</span></div>}
+          {nowPlaying?.item && <div className="now-playing"><Volume2 size={16}/><span>Now playing: <b>{nowPlaying.item.name}</b> — {nowPlaying.item.artists?.map(a => a.name).join(', ')}{livePosition ? ` · countdown #${livePosition}` : currentAlreadyRecorded ? ' · already counted' : ''}</span></div>}
         </div>
 
         <aside className="side-card prizes-card">
